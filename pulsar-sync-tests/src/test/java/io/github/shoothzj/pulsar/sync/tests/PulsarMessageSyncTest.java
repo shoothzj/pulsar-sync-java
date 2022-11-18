@@ -49,7 +49,7 @@ public class PulsarMessageSyncTest {
         PulsarConfig dstConfig = PulsarConfig.builder().brokerHost("localhost")
                 .httpPort(dstServer.getWebPort()).tcpPort(dstServer.getTcpPort()).build();
         PulsarSync pulsarSync = new PulsarSync(srcConfig, dstConfig, SyncConfig.builder().subscriptionName("test")
-                .subscriptionInitialPosition(SubscriptionInitialPosition.Earliest).build());
+                .build());
         pulsarSync.start();
         Consumer<byte[]> consumer = PulsarClient.builder()
                 .serviceUrl(String.format("pulsar://localhost:%d", dstServer.getTcpPort())).build()
