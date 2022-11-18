@@ -23,7 +23,7 @@ import org.apache.commons.lang3.tuple.Pair;
 
 import java.util.concurrent.ConcurrentSkipListMap;
 
-public class SparseMap<K, V> {
+public class SparseMap<K extends Comparable<K>, V> {
 
     private ConcurrentSkipListMap<K, Pair<V, Long>> map = new ConcurrentSkipListMap<>();
 

@@ -30,5 +30,41 @@
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>pulsar-sync-deploy</artifactId>
+    <packaging>pom</packaging>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.github.shoothzj</groupId>
+            <artifactId>pulsar-sync-core</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <version>${assembly-maven-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>distro-assembly</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                        <configuration>
+                            <attach>true</attach>
+                            <tarLongFileMode>posix</tarLongFileMode>
+                            <finalName>pulsar-sync-${project.version}</finalName>
+                            <descriptors>
+                                <descriptor>src/assemble/bin.xml</descriptor>
+                            </descriptors>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 
 </project>
