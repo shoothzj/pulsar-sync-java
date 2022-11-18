@@ -22,7 +22,6 @@ package io.github.shoothzj.pulsar.sync.core;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
-import org.apache.pulsar.client.api.SubscriptionInitialPosition;
 
 @Setter
 @Getter
