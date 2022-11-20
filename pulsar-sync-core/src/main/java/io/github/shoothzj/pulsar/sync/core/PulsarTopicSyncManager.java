@@ -20,8 +20,11 @@
 package io.github.shoothzj.pulsar.sync.core;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.pulsar.client.admin.PulsarAdminException;
 
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -61,21 +64,33 @@ public class PulsarTopicSyncManager {
     }
 
     public void sync() {
-        pulsarHandle.srcAdmin().topics().getListAsync(tenantNamespace.namespace())
-                .whenComplete((topics, throwable) -> {
-                    if (throwable != null) {
-                        log.error("failed to get partitioned topic list", throwable);
-                        return;
-                    }
-                    for (String topic : topics) {
-                        if (topic.contains("-partition")) {
-                            continue;
-                        }
+        getTopicListAsync(tenantNamespace.namespace()).exceptionally(throwable -> {
+            log.error("failed to get [{}] partitioned topic list", tenantNamespace.namespace(), throwable);
+            return null;
+        }).thenAccept(topics -> {
+            for (String topic : topics) {
+                if (topic.contains("-partition")) {
+                    continue;
+                }
+                createNonPartitionTopic(topic).whenComplete((unused, throwable) -> {
+                    if (throwable == null || throwable instanceof PulsarAdminException.ConflictException) {
                         TenantNamespaceTopic tenantNamespaceTopic = new TenantNamespaceTopic(tenantNamespace, topic);
                         log.info("begin to start topic sync worker [{}]", tenantNamespaceTopic);
                         map.computeIfAbsent(tenantNamespaceTopic, k -> startTopicSyncWorker(tenantNamespaceTopic));
+                    } else {
+                        log.error("failed to create non-partition topic [{}]", topic, throwable);
                     }
                 });
+            }
+        });
+    }
+
+    private CompletableFuture<List<String>> getTopicListAsync(String namespace) {
+        return pulsarHandle.srcAdmin().topics().getListAsync(namespace);
+    }
+
+    private CompletableFuture<Void> createNonPartitionTopic(String topic) {
+        return pulsarHandle.dstAdmin().topics().createNonPartitionedTopicAsync(topic);
     }
 
     public PulsarPartitionSyncWorker startTopicSyncWorker(TenantNamespaceTopic tenantNamespaceTopic) {

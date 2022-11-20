@@ -83,7 +83,9 @@ public class PulsarPartitionedTopicSyncWorker {
     }
 
     public void close() {
-        this.scheduledFuture.cancel(true);
+        if (this.scheduledFuture != null) {
+            this.scheduledFuture.cancel(true);
+        }
         this.map.forEach((k, v) -> v.close());
     }
 }

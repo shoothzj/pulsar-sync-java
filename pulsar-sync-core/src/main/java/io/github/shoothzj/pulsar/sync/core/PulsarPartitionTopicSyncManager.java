@@ -20,8 +20,12 @@
 package io.github.shoothzj.pulsar.sync.core;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.pulsar.client.admin.PulsarAdminException;
+import org.apache.pulsar.common.partition.PartitionedTopicMetadata;
 
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -61,18 +65,42 @@ public class PulsarPartitionTopicSyncManager {
     }
 
     public void sync() {
-        pulsarHandle.srcAdmin().topics().getPartitionedTopicListAsync(tenantNamespace.namespace())
-                .whenComplete((topics, throwable) -> {
-                    if (throwable != null) {
-                        log.error("failed to get partitioned topic list", throwable);
-                        return;
-                    }
-                    for (String topic : topics) {
-                        TenantNamespaceTopic tenantNamespaceTopic = new TenantNamespaceTopic(tenantNamespace, topic);
-                        log.info("begin to start partitioned topic sync worker [{}]", tenantNamespaceTopic);
-                        map.computeIfAbsent(tenantNamespaceTopic, k -> startTopicSyncWorker(tenantNamespaceTopic));
-                    }
+        getPartitionedTopicListAsync(tenantNamespace.namespace()).exceptionally(throwable -> {
+            log.error("failed to get [{}] partitioned topic list", tenantNamespace.namespace(), throwable);
+            return null;
+        }).thenAccept(topics -> {
+            for (String topic : topics) {
+                getPartitionedTopicMetadataAsync(topic).exceptionally(throwable -> {
+                    log.error("Failed to get partitioned topic [{}] metadata", topic, throwable);
+                    return null;
+                }).thenAccept(metadata -> {
+                    CompletableFuture<Void> partitionedTopicAsync = createPartitionedTopicAsync(topic,
+                            metadata.partitions, metadata.properties);
+                    partitionedTopicAsync.whenComplete((unused, throwable) -> {
+                        if (throwable == null || throwable instanceof PulsarAdminException.ConflictException) {
+                            TenantNamespaceTopic topicObj = new TenantNamespaceTopic(tenantNamespace, topic);
+                            log.info("begin to start partitioned topic sync worker [{}]", topicObj);
+                            map.computeIfAbsent(topicObj, k -> startTopicSyncWorker(topicObj));
+                        } else {
+                            log.error("Failed to create partitioned topic [{}]", topic, throwable);
+                        }
+                    });
                 });
+            }
+        });
+    }
+
+    private CompletableFuture<List<String>> getPartitionedTopicListAsync(String namespace) {
+        return pulsarHandle.srcAdmin().topics().getPartitionedTopicListAsync(namespace);
+    }
+
+    private CompletableFuture<PartitionedTopicMetadata> getPartitionedTopicMetadataAsync(String topic) {
+        return pulsarHandle.srcAdmin().topics().getPartitionedTopicMetadataAsync(topic);
+    }
+
+    private CompletableFuture<Void> createPartitionedTopicAsync(String topic, int numPartitions,
+                                                                Map<String, String> properties) {
+        return pulsarHandle.dstAdmin().topics().createPartitionedTopicAsync(topic, numPartitions, properties);
     }
 
     public PulsarPartitionedTopicSyncWorker startTopicSyncWorker(TenantNamespaceTopic tenantNamespaceTopic) {
