@@ -72,16 +72,21 @@ public class PulsarNamespaceSyncManager {
             }
             for (String namespace : namespaces) {
                 pulsarHandle.srcAdmin().namespaces().getPoliciesAsync(namespace).exceptionally(getPoliciesThrowable -> {
-                    log.error("Failed to sync namespace {}, cause get policies from source pulsar failed", namespace, getPoliciesThrowable);
+                    log.error("Failed to sync namespace {}, cause get policies from source pulsar failed",
+                            namespace, getPoliciesThrowable);
                     return null;
-                }).thenAccept((policies) -> pulsarHandle.dstAdmin().namespaces().createNamespaceAsync(namespace, policies).whenComplete((unused, createNamespaceThrowable) -> {
-                    if (createNamespaceThrowable == null || (createNamespaceThrowable instanceof PulsarAdminException.ConflictException exception
+                }).thenAccept((policies) -> pulsarHandle.dstAdmin().namespaces()
+                        .createNamespaceAsync(namespace, policies).whenComplete((unused, createNamespaceThrowable) -> {
+                    if (createNamespaceThrowable == null
+                            || (createNamespaceThrowable instanceof PulsarAdminException.ConflictException exception
                             && exception.getStatusCode() == HttpResponseStatus.CONFLICT.code())) {
                         TenantNamespace tenantNamespace = new TenantNamespace(tenant, namespace);
-                        partitionMap.computeIfAbsent(tenantNamespace, k -> startPartitionedTopicSyncManager(tenantNamespace));
+                        partitionMap.computeIfAbsent(tenantNamespace, k ->
+                                startPartitionedTopicSyncManager(tenantNamespace));
                         map.computeIfAbsent(tenantNamespace, k -> startTopicSyncManager(tenantNamespace));
                     } else {
-                        log.error("Failed to sync namespace {}, cause create it in destination pulsar failed", namespace, createNamespaceThrowable);
+                        log.error("Failed to sync namespace {}, cause create it in destination pulsar failed",
+                                namespace, createNamespaceThrowable);
                     }
                 }));
             }
