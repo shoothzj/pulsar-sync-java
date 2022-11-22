@@ -41,7 +41,13 @@
         <dependency>
             <groupId>io.github.embedded-middleware</groupId>
             <artifactId>embedded-pulsar-core</artifactId>
-            <version>0.0.2</version>
+            <version>${embedded-pulsar.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.awaitility</groupId>
+            <artifactId>awaitility</artifactId>
+            <version>${awaitility.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
