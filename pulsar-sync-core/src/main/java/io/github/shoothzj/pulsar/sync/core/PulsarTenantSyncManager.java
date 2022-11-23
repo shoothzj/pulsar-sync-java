@@ -20,8 +20,13 @@
 package io.github.shoothzj.pulsar.sync.core;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.pulsar.client.admin.PulsarAdminException;
+import org.apache.pulsar.common.policies.data.TenantInfo;
 
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -57,14 +62,28 @@ public class PulsarTenantSyncManager {
     }
 
     private void sync() {
-        pulsarHandle.srcAdmin().tenants().getTenantsAsync().whenComplete((tenants, throwable) -> {
-            if (throwable != null) {
-                log.error("Failed to get tenants", throwable);
-                return;
-            }
-            for (String tenant : tenants) {
-                map.computeIfAbsent(tenant, k -> startNamespaceSyncManager(tenant));
-            }
+        CompletableFuture<List<String>> completableFuture = pulsarHandle.srcAdmin().tenants().getTenantsAsync();
+        completableFuture.exceptionally(throwable -> {
+            log.error("Failed to get tenants", throwable);
+            return null;
+        });
+        completableFuture.thenAccept(tenants -> {
+            pulsarHandle.dstAdmin().clusters().getClustersAsync().exceptionally(getClusterInfoThrowable -> {
+                log.error("Failed to get cluster info from destination pulsar", getClusterInfoThrowable);
+                return null;
+            }).thenAccept(clusters -> {
+                TenantInfo tenantInfo = TenantInfo.builder().allowedClusters(new HashSet<>(clusters)).build();
+                for (String tenant : tenants) {
+                    pulsarHandle.dstAdmin().tenants()
+                            .createTenantAsync(tenant, tenantInfo).whenComplete((unused, throwable1) -> {
+                        if (throwable1 == null || (throwable1 instanceof PulsarAdminException.ConflictException)) {
+                            map.computeIfAbsent(tenant, k -> startNamespaceSyncManager(tenant));
+                        } else {
+                            log.error("Failed to sync tenant {}, and skip it.", tenant, throwable1);
+                        }
+                    });
+                }
+            });
         });
     }
 
